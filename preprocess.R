@@ -213,7 +213,12 @@ stdspd_en <- EqualWidth(stdspd, 20)
 #continuous_features <- data.frame(mmsis, lon, lat, speedmin, accmin, avgspd, meanacc, stdspd,time, labels)
 #continuous_features <- data.frame(mmsis, lon, lat, speedmin,  avgspd, stdspd, labels)
 
-context_features <- cbind(mmsis, lon_en, lat_en, speedmin_en, accmin_en, avgspd_en, meanacc_en, stdspd_en, labels)
+#context_features <- cbind(mmsis, lon_en, lat_en, speedmin_en, accmin_en, avgspd_en, meanacc_en, stdspd_en, labels)
+
+# selected features:
+#  point-based: speed
+#  segmentation-based: avg_spd, std_spd
+context_features <- cbind(mmsis, speedmin_en, avgspd_en, stdspd_en, labels)
 
 # write to csv file
 # -------------------------------------------------------------------

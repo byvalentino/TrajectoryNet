@@ -643,9 +643,6 @@ def main(_):
             print("running epoch {0}".format(i))
             minibatch = run_batch(sess, m, train_data, m.train_op, minibatch)
 
-        # get best results
-        best = monitor.getBest()
-        log.write(best, monitor.minibatch)
         log.close()
 
         # save the model
