@@ -5,10 +5,22 @@ library(foreach)
 library(ggplot2)
 library(discretization)
 library(geosphere)
+library(plotly)
 
 #-------------------------------
 # define functions
 #-------------------------------
+
+# calculate difference of longitude and latitude
+DiffGPS <- function(lon) {
+  lon_1 <- lon
+  lon_2 <- lon
+  lon_1 <- lon_1[-mmsi_index_last$x]
+  lon_2 <- lon_2[-mmsi_index_first$x]
+  
+  lon = lon_1 - lon_2
+  lon
+}
 
 # equal-width discretization
 EqualWidth <- function(x,n){
@@ -91,7 +103,6 @@ HampelFilter <- function (x, k,t0=3){
   ind <- c()
   
   for (i in (k + 1):(n-k)){
-    if (i %% 10000 == 0) {print(i)}
     if (x[i]<max_v && x[i]>min_v){
       next
     }
@@ -99,10 +110,7 @@ HampelFilter <- function (x, k,t0=3){
     y[i] <- median(x[(i - k):(i + k)])
     if (y[i] > max_v) {y[i] <- max_v}
     if (y[i] < min_v) {y[i] <- min_v}
-    
-    
   }
-  
   list(y = y, ind = ind)
 }
 
@@ -144,15 +152,22 @@ lag_apply <- function(x, n, callback){
 }
 
 #-------------------------------
-# data processing
+# Processing: load data -> select features -> discretization -> one-hot encoding
+# Note:
+#   The one-hot encoding is essential to the success of the model:
+#   It enables the learning of feature embeddings in the recurrent network.
 #-------------------------------
 
+# Please set working directory to the repo
+setwd('../trajectoryNet')
 
-# load original data
-#data <- read.csv("mobility.csv") # mobility data
+# load raw trajectory data from .csv
+data <- read.csv("data/fourclassdata.csv")
 
-# select columns
-data <- subset(data, select=c("MMSI", "speedmin", "avgspeed", "stdspeed", "COARSE_FIS"))
+# select features
+# the first column (MMSI) denotes the ID of a person
+# the last column (COARSE_FIS) denotes the labels
+data <- subset(data, select=c("MMSI", "LONGITUDE","LATITUDE","speedmin", "accmin2", "avgspeed","meanacc","stdspeed", "date", "COARSE_FIS"))
 
 # select the four classes with their ids
 # car, walk, bus, bike: 1,2,3,6
@@ -162,32 +177,44 @@ four_class_data <- data[data$COARSE_FIS %in% c(1,2,3,6),]
 len = length(four_class_data$LONGITUDE)
 four_class_data$rowNum <- seq(len)
 
-# find starting and end points for each vessel
+# find starting and end points for each person
 mmsi_index_last <- aggregate(four_class_data$rowNum, by=list(four_class_data$MMSI), function(x) tail(x, 1))
 mmsi_index_first <- aggregate(four_class_data$rowNum, by=list(four_class_data$MMSI), function(x) head(x, 1))
 
 labels <- four_class_data$COARSE_FIS[-mmsi_index_last$x]
-labels[labels==6] <- 0 # change bike to label 0
+labels[labels==6] <- 0 # change bike from label 6 to label 0
 mmsis <- four_class_data$MMSI[-mmsi_index_last$x]
 
-# extract features
+# difference of longitude and latitude
+lon <- DiffGPS(four_class_data$LONGITUDE)
+lat <- DiffGPS(four_class_data$LATITUDE)
+# other features
 speedmin <-four_class_data$speedmin[-mmsi_index_last$x]
+accmin<-four_class_data$accmin2[-mmsi_index_last$x]
 avgspd<-four_class_data$avgspeed[-mmsi_index_last$x]
+meanacc<-four_class_data$meanacc[-mmsi_index_last$x]
 stdspd<-four_class_data$stdspeed[-mmsi_index_last$x]
 time <- four_class_data$date[-mmsi_index_last$x]
 time <- as.POSIXct(time)
 
-# calculate encoding/discretization
+# calculate on-hot-encoding/discretization
 # -------------------------------------------------------------------
-speedmin_en <- EqualWidth(speedmin,50)
-avgspd_en <- EqualWidth(avgspd,50)
-stdspd_en <- EqualWidth(stdspd,50)
+lon_en <- EqualWidth(lon, 20)
+lat_en <- EqualWidth(lat, 20)
+speedmin_en <- EqualWidth(speedmin,20)
+accmin_en <- EqualWidth(accmin, 20)
+avgspd_en <- EqualWidth(avgspd,20)
+meanacc_en <- EqualWidth(meanacc, 20)
+stdspd_en <- EqualWidth(stdspd, 20)
 
-
-# bind features
+# bind features into one data frame
 # -------------------------------------------------------------------
-context_features <- cbind(mmsis, speedmin_en, avgspd_en, stdspd_en, labels)
+#continuous_features <- data.frame(speedmin, avgspd, stdspd, labels)
+#continuous_features <- data.frame(mmsis, lon, lat, speedmin, accmin, avgspd, meanacc, stdspd,time, labels)
+#continuous_features <- data.frame(mmsis, lon, lat, speedmin,  avgspd, stdspd, labels)
+
+context_features <- cbind(mmsis, lon_en, lat_en, speedmin_en, accmin_en, avgspd_en, meanacc_en, stdspd_en, labels)
 
 # write to csv file
 # -------------------------------------------------------------------
-write.table(point_features, file = "mobility_context_features.csv", sep = ",", row.names = FALSE, col.names = FALSE)
+write.table(context_features, file = "data/mobility_encoding.csv", sep = ",", row.names = FALSE, col.names = FALSE)
