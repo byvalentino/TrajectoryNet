@@ -11,4 +11,4 @@ class MyThread(threading.Thread):
     return self.res
 
   def run(self):
-    self.res = apply(self.func, self.args)
+    self.res = self.func(*self.args)

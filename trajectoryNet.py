@@ -60,9 +60,9 @@ else:
     conf.test_id = [test_task]
 
 # this data are generated from create_npy.py
-x_file = 'x_mobility_context.npy'
-y_file = 'y_mobility_point.npy'
-mmsi_file = 'mmsi_mobility_point.npy'
+x_file = 'x_mobility.npy'
+y_file = 'y_mobility.npy'
+mmsi_file = 'mmsi_mobility.npy'
 
 # selection of cell type
 rnnType = RNNType.GRU_b
@@ -88,9 +88,8 @@ else:
     else:
         activation_function = tf.nn.tanh
 
-lr = Learning_rate.Learning_rate(global_lr=0.001, decay_rate=0.999, decay_step=50)
-
 # load data
+print('loading data from .npy files')
 x = np.load(dataPath + x_file)
 y = np.load(dataPath+y_file)
 mmsi = np.load(dataPath+mmsi_file)
@@ -123,7 +122,6 @@ if conf.testmode == "lobo":
 elif conf.testmode == "random":
     (train_index, test_index, valid_index) = Data.Data.randomSplitDataset(mmsi[0], train_perc = conf.train_ratio, val_perc = conf.val_ratio)
 
-print(train_index)
 
 train_seq_len = mmsi[1][train_index]
 test_seq_len = mmsi[1][test_index]
@@ -190,11 +188,8 @@ class VesselModel(object):
         else:
             self.seq_len = sum(test_seq_len)
 
-        with tf.name_scope("lstm-cell") as scope:
-            rnn_cell = self.get_rnn_cell()
-
         with tf.name_scope("multi-rnn-cell") as scope:
-            cell = self.get_multi_rnn_cell(rnn_cell)
+            cell = self.get_multi_rnn_cell()
 
         # what timesteps we want to stop at, notice it's different for each batch
         self._early_stop = tf.placeholder(tf.int64, shape=[self.batch_size], name = "early-stop")
@@ -303,13 +298,12 @@ class VesselModel(object):
             lstm_cell_bw = rnnCell(self.hidden_size, activation=activation_function)
             return (lstm_cell_fw, lstm_cell_bw)
 
-    def get_multi_rnn_cell(self, rnn_cell):
+    def get_multi_rnn_cell(self):
         """Create multiple layers of rnn_cell based on RNN type"""
         if rnnType == RNNType.LSTM_b or rnnType == RNNType.GRU_b:
-            (lstm_cell_fw, lstm_cell_bw) = rnn_cell
             cell_fw = tf.contrib.rnn.MultiRNNCell([rnnCell(self.hidden_size, activation=activation_function) for _ in range(self.num_layers)])
             cell_bw = tf.contrib.rnn.MultiRNNCell([rnnCell(self.hidden_size, activation=activation_function) for _ in range(self.num_layers)])
-            return (lstm_cell_fw, lstm_cell_bw)
+            return (cell_fw, cell_bw)
         elif rnnType == RNNType.LSTM_u or rnnType == RNNType.GRU:
             cell = tf.contrib.rnn.MultiRNNCell([rnnCell(self.hidden_size, activation=activation_function) for _ in range(self.num_layers)])
             return cell
@@ -473,9 +467,14 @@ def test_model(sess, minibatch):
     t_val.join()
     result_val = t_val.get_result()
     
-    result = result_train + result_test + result_val
-    monitor.new(result, minibatch)
-    return result
+    print("Train cost {0:0.3f}, Acc {1:0.3f}".format(
+                 result_train[0], result_train[1]))
+    print("Valid cost {0:0.3f}, Acc {1:0.3f}".format(
+                 result_val[0], result_val[1]))
+    print("Test  cost {0:0.3f}, Acc {1:0.3f}".format(
+                  result_test[0], result_test[1]))
+
+    return result_train+result_test+result_val
     
 
 def run_batch(session, m, data, eval_op, minibatch):
@@ -497,15 +496,11 @@ def run_batch(session, m, data, eval_op, minibatch):
         temp_dict.update({m.targets: y_batch})
         temp_dict.update({m.early_stop: e_batch})
 
-        #m.learning_rate = lr.get_lr()
-
         # train the model
         if m.is_training and eval_op == m.train_op:
 
             _ = session.run([eval_op], feed_dict=temp_dict)
 
-            print("minibatch {0}: {1}/{2}, lr={3:0.5f}\r".format(minibatch, batch, epoch_size,m.learning_rate),)
-            lr.increase_global_step()
             # track stats every 10 minibatches
             if minibatch % evaluate_freq  == 0:
                 result = test_model(session, minibatch) # recursive function
@@ -521,14 +516,13 @@ def run_batch(session, m, data, eval_op, minibatch):
     
             # print test confusion matrix
             if not m.is_training and not m.is_validation:
+                 print('Confusion matrix on the test data:')
                  print(confusion)
                  # output predictions in test mode
                  if conf.test_mode:
                      pred = session.run([m._prob_predictions], feed_dict=temp_dict)
                      pred = np.array(pred)
                      np.set_printoptions(threshold=np.nan)
-                     print(pred.shape)
-                     print(pred)
                      #results = np.column_stack((tar, pred))
                      #np.savetxt("results/prediction.result", pred)#, fmt='%.3f')
                      print("output target and predictions to file prediction.csv")
