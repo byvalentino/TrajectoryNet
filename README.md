@@ -28,8 +28,9 @@ The follwoing softwares are required for this source code.
 - R (optional for preprocessing)
 
 ### Data
-The data is self-contained in the [`data`] directory.
-This dataset contains raw data as well as the preprocessed data in .npy format:
+The original dataset can be found [here](https://www.microsoft.com/en-us/research/publication/geolife-gps-trajectory-dataset-user-guide/).
+We preprocessed a subset of the data in the `data` directory.
+This dataset contains features in `.csv` format as well as `.npy` format:
 - `csvdata.csv`: include data of four classes (car, bike, drive and walk) with longitudes, latitudes, speeds and other features
 - `encodedcsv.zip`: the same data after discretization and one-hot-encoding
 - `npy.zip`: the same data in `.npy` format. This can be used to train the model directly.
