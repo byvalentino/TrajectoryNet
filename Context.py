@@ -5,6 +5,7 @@ import os
 
 
 class Context:
+  #https://stackoverflow.com/questions/136097/what-is-the-difference-between-staticmethod-and-classmethod
   @staticmethod
   def get_context(x, w=2, normalize=True):
     """w denotes window size on one side, the real window size is (w*2+1)"""
